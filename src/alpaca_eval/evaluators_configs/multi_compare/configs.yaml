@@ -1,0 +1,14 @@
+# alpaca eval is
+self_check_gpt4:
+  prompt_template: "multi_compare/multi_compare.txt"
+  fn_completions: "self_closeai_completions"
+  completions_kwargs:
+    model_name: "gpt-4-32k"
+    max_tokens: 1000
+    temperature: 0
+#  completion_parser_kwargs:
+#    outputs_to_match:
+#      1: '(?:^|\n) ?Output \(a\)'
+#      2: '(?:^|\n) ?Output \(b\)'
+  fn_completion_parser: "multi_rank_parser"
+  batch_size: 1

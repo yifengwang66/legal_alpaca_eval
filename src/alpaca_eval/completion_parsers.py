@@ -9,7 +9,8 @@ import numpy as np
 
 from . import utils
 
-__all__ = ["regex_parser", "lmsys_parser", "ranking_parser", "json_parser", "eval_parser", "pipeline_meta_parser"]
+__all__ = ["regex_parser", "lmsys_parser", "ranking_parser", "json_parser", "eval_parser", "pipeline_meta_parser",
+           "multi_rank_parser"]
 
 
 def regex_parser(completion: str, outputs_to_match: dict[Any, Any]) -> list[Any]:
@@ -59,7 +60,7 @@ def regex_parser(completion: str, outputs_to_match: dict[Any, Any]) -> list[Any]
             break
         responses.append(key)
         # avoid matching the same output twice
-        completion = completion[match.end() :]
+        completion = completion[match.end():]
     return responses
 
 
@@ -119,6 +120,19 @@ def ranking_parser(completion: str) -> list[Any]:
         assert rank in [1, 2]
 
         return [rank]
+    except Exception as e:
+        logging.error(f"{e}\nContent: {completion}\n" "You must manually fix the score pair.")
+        return [np.nan]
+
+
+def multi_rank_parser(completion: str) -> list[Any]:
+    try:
+        if isinstance(completion, str):
+            ordered_completions = [completion]
+        else:
+            ordered_completions = [json.dumps(completion)]
+
+        return ordered_completions
     except Exception as e:
         logging.error(f"{e}\nContent: {completion}\n" "You must manually fix the score pair.")
         return [np.nan]
@@ -192,7 +206,7 @@ def replace_parser(completion: str, replacer: dict, default_replacer: Any = "aut
 
 
 def pipeline_meta_parser(
-    completion: str, parsers_to_kwargs: dict[str, dict], is_squeeze: bool = True, _depth=0
+        completion: str, parsers_to_kwargs: dict[str, dict], is_squeeze: bool = True, _depth=0
 ) -> list[Any]:
     r"""Applies a list of parsers in sequence to a completion.
 

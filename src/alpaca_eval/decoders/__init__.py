@@ -7,6 +7,7 @@ def get_fn_completions(name: Union[str, Callable]) -> Callable:
     if not isinstance(name, str):
         return name
 
+    print("name:", name)
     if name == "anthropic_completions":
         try:
             from .anthropic import anthropic_completions
@@ -81,6 +82,14 @@ def get_fn_completions(name: Union[str, Callable]) -> Callable:
             packages = ["vllm", "ray", "transformers"]
             logging.exception(f"You need {packages} to use vllm_completions. Error:")
             raise e
+
+    elif name == "self_azure_gpt4_completions":
+        from .self_azure_gpt4 import self_azure_gpt4_completions
+        return self_azure_gpt4_completions
+
+    elif name == "self_closeai_completions":
+        from .self_closeai import self_closeai_completions
+        return self_closeai_completions
 
     else:
         raise ValueError(f"Unknown decoder: {name}")

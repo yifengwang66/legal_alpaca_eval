@@ -35,3 +35,46 @@ def pairwise_to_winrate(preferences: Union[pd.Series, Sequence]) -> dict[str, in
         n_draws=n_draws,
         n_total=n_total,
     )
+
+
+def multiwise_to_avg_rank(rank_obj_list):
+    """
+    rank_obj_list example:
+    [
+        [
+            {
+                "model": "model_1",
+                "rank": 1,
+            },
+            {
+                "model": "model_2",
+                "rank": 2,
+            },
+            ...
+        ],
+        [
+            {
+                "model": "model_1",
+                "rank": 2,
+            },
+            {
+                "model": "model_2",
+                "rank": 1,
+            },
+            ...
+        ],
+    ]
+
+    """
+    df = pd.DataFrame([item for per_rank in rank_obj_list for item in per_rank])
+    # 计算每个model的平均rank
+    average_rank = df.groupby('model')['rank'].mean().rename('avg_rank')
+
+    # 计算每个model获得的每个排名的次数
+    rank_counts = df.groupby(['model', 'rank']).size().unstack(fill_value=0)
+
+    return pd.merge(
+        average_rank,
+        rank_counts,
+        on="model"
+    )

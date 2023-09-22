@@ -152,6 +152,7 @@ def make_prompts(
                 current_prompt = current_prompt.replace("{" + to_format + "}", str(df_out.iloc[i + j][to_format]), 1)
         prompts.append(current_prompt)
 
+    print("make_prompts prompts:", prompts, df_out)
     return prompts, df_out
 
 

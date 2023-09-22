@@ -165,6 +165,7 @@ class BaseAnnotator(abc.ABC):
         for c in self.primary_keys:
             df_to_annotate[c] = df_to_annotate[c].astype(str)
 
+        print("BaseAnnotator.__call__")
         all_annotated = []
         for df_chunk in utils.dataframe_chunk_generator(df_to_annotate, chunksize, tqdm_desc="Annotation chunk"):
             curr_df_to_annotate = self._preprocess(df_chunk)
@@ -246,6 +247,10 @@ class BaseAnnotator(abc.ABC):
         """Annotate the examples."""
 
         df_annotated = df_to_annotate
+        print("_annotate self.annotator_column", self.annotator_column)
+        print("_annotate self.annotators.keys:", self.annotators.keys())
+        print("_annotate self.annotation_key:", self.annotation_key)
+        print("_annotate df_annotated", df_annotated.columns, df_annotated.head())
         for annotator in self.annotators.keys():
             # only annotate examples that have not been annotated yet
             curr_idcs = df_annotated[self.annotator_column] == annotator
@@ -253,7 +258,7 @@ class BaseAnnotator(abc.ABC):
                 curr_idcs &= df_annotated[self.annotation_key].isna()
 
             logging.info(f"Annotating {curr_idcs.sum()} examples with {annotator}")
-
+            print("_annotate self.annotators[annotator]", self.annotators[annotator], df_annotated.loc[curr_idcs, self.available_fields_to_format])
             # actual annotation
             curr_annotated = self.annotators[annotator](
                 df_annotated.loc[curr_idcs, self.available_fields_to_format],
@@ -566,10 +571,13 @@ class SingleAnnotator:
         completions = self.fn_completions(prompts=prompts, **self.completions_kwargs, **decoding_kwargs)
 
         annotations_to_save, completions_to_save = self._parse_completions(completions=completions["completions"])
+        print('SingleAnnotator.__call__ self.annotation_column:', self.annotation_column, annotations_to_save)
         df_to_annotate[self.annotation_column] = annotations_to_save
         if self.completion_column is not None:
             df_to_annotate[self.completion_column] = completions_to_save
 
+
+        # 添加附加数据如用时和开销
         for k, v in completions.items():
             if k != "completions":
                 if len(df_to_annotate[self.annotation_column]) == len(v) * self.batch_size:
@@ -645,12 +653,12 @@ class SingleAnnotator:
                 batch_annotations = self.fn_completion_parser(completion)
                 batch_annotations = list(batch_annotations)
 
-                if len(batch_annotations) != self.batch_size:
-                    logging.warning(
-                        f"Found {len(batch_annotations)} annotations in:'''\n{completion}\n''' but expected"
-                        f" {self.batch_size}. We are setting all annotations to None."
-                    )
-                    batch_annotations = [None] * self.batch_size
+                # if len(batch_annotations) != self.batch_size:
+                #     logging.warning(
+                #         f"Found {len(batch_annotations)} annotations in:'''\n{completion}\n''' but expected"
+                #         f" {self.batch_size}. We are setting all annotations to None."
+                #     )
+                #     batch_annotations = [None] * self.batch_size
 
             except Exception as e:
                 logging.exception(f"Error while parsing completion: '''\n{completion}\n'''")
@@ -658,6 +666,8 @@ class SingleAnnotator:
 
             all_annotations += batch_annotations
             all_completions += [completion] * self.batch_size
+        print("_parse_completions all_annotations:", all_annotations)
+        print("_parse_completions all_completions:", all_completions)
         return all_annotations, all_completions
 
     def _postprocess(self, df_annotated: pd.DataFrame) -> pd.DataFrame:
