@@ -12,7 +12,7 @@ OPENAI_ORGANIZATION_IDS = os.environ.get("OPENAI_ORGANIZATION_IDS", None)
 if isinstance(OPENAI_ORGANIZATION_IDS, str):
     OPENAI_ORGANIZATION_IDS = OPENAI_ORGANIZATION_IDS.split(",")
 # OPENAI_MAX_CONCURRENCY = int(os.environ.get("OPENAI_MAX_CONCURRENCY", 5))
-OPENAI_MAX_CONCURRENCY = int(os.environ.get("OPENAI_MAX_CONCURRENCY", 1))
+OPENAI_MAX_CONCURRENCY = int(os.environ.get("OPENAI_MAX_CONCURRENCY", 5))
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", None)
 ANTHROPIC_MAX_CONCURRENCY = int(os.environ.get("ANTHROPIC_MAX_CONCURRENCY", 1))
@@ -29,6 +29,18 @@ CURRENT_DIR = Path(__file__).parent
 EVALUATORS_CONFIG_DIR = CURRENT_DIR / "evaluators_configs"
 MODELS_CONFIG_DIR = CURRENT_DIR / "models_configs"
 BASE_DIR = Path(__file__).parents[2]
+
+
+MODEL_NAME_VEIL = {
+    "gpt-3": "m1",
+    "baichuan": "m2",
+    "glm": "m3",
+    "wenxinyiyan": "m4",
+    "claude": "m5",
+    "360": "m6",
+    "xunfei": "m7",
+    "tongyi": "m8"
+}
 
 MINIMAL_EVALUATORS = (
     "alpaca_eval_gpt4",

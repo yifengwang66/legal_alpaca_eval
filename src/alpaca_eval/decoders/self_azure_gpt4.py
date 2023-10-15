@@ -17,12 +17,15 @@ import os
 from .. import constants, utils
 
 __all__ = ["self_azure_gpt4_completions"]
-# openai.api_base = 'https://api.closeai-proxy.xyz/v1'
 openai.api_base = 'https://chatlaw.openai.azure.com/'
 DEFAULT_OPENAI_API_BASE = openai.api_base
 
 
 def import_azure_api():
+    os.unsetenv("OPENAI_API_KEY")
+    os.unsetenv("OPENAI_API_TYPE")
+    os.unsetenv("OPENAI_API_BASE")
+    os.unsetenv("OPENAI_API_VERSION")
     os.environ["OPENAI_API_KEY"] = "e8f5fd1cfbab4335849a530b8b42e596"
     os.environ["OPENAI_API_TYPE"] = "azure"
     os.environ["OPENAI_API_BASE"] = "https://chatlaw.openai.azure.com/"
@@ -89,6 +92,7 @@ def self_azure_gpt4_completions(
     ['As an AI language model, I can confirm that 1+1 equals  02 in octal numeral system, 10 in decimal numeral
     system, and  02 in hexadecimal numeral system.', '4']
     """
+    import_azure_api()
     num_procs = num_procs or constants.OPENAI_MAX_CONCURRENCY
 
     n_examples = len(prompts)
@@ -96,7 +100,7 @@ def self_azure_gpt4_completions(
         logging.info("No samples to annotate.")
         return []
     else:
-        logging.info(f"Using `self_completions` on {n_examples} prompts using {model_name}.")
+        logging.info(f"Using `self_azure_completions` on {n_examples} prompts using {model_name}.")
 
     if tokens_to_avoid or tokens_to_favor:
         tokenizer = tiktoken.encoding_for_model(model_name)
@@ -199,7 +203,6 @@ def _self_azure_completion_helper(
         temperature: Optional[float] = 0.7,
         **kwargs,
 ):
-    import_azure_api()
     prompt_batch, max_tokens = args
 
     # randomly select orgs

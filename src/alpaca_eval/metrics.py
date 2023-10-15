@@ -78,3 +78,75 @@ def multiwise_to_avg_rank(rank_obj_list):
         rank_counts,
         on="model"
     )
+
+
+def round_rank_evaluate(preferences):
+    """
+        preferences example:
+        [
+            [
+                {
+                    "model": "model_1",
+                    "rank": 1,
+                },
+                {
+                    "model": "model_2",
+                    "rank": 2,
+                },
+            ],
+            [
+                {
+                    "model": "model_1",
+                    "rank": 0,
+                },
+                {
+                    "model": "model_2",
+                    "rank": 0,
+                },
+            ],
+        ]
+    """
+    win_list = []
+    models_score_record = {}
+    result_dic = {}
+    initial_metrics = dict(
+        win_rate=0,
+        n_wins=0,
+        n_draws=0,
+        n_total=len(preferences),
+    )
+    for i, per_rank in enumerate(preferences):
+        if models_score_record.get(per_rank[0]["model"]) is None:
+            models_score_record[per_rank[0]["model"]] = []
+        if models_score_record.get(per_rank[1]["model"]) is None:
+            models_score_record[per_rank[1]["model"]] = []
+        # 两个模型都存在显著错误的情况
+        if per_rank[0]["rank"] == 0 and per_rank[1]["rank"] == 0:
+            win_list.append("both_wrong")
+            models_score_record[per_rank[0]["model"]].append(0)
+            models_score_record[per_rank[1]["model"]].append(0)
+            win_name = per_rank[0]["model"]
+            lose_name = per_rank[1]["model"]
+        else:
+            win_name, lose_name = (per_rank[0]["model"], per_rank[1]["model"]) \
+                if per_rank[0]["rank"] == 1 \
+                else (per_rank[1]["model"], per_rank[0]["model"])
+            models_score_record[win_name].append(1)
+            models_score_record[lose_name].append(0)
+            if result_dic.get(win_name) is None:
+                result_dic[per_rank[0]["model"]] = initial_metrics.copy()
+                result_dic[per_rank[1]["model"]] = initial_metrics.copy()
+            result_dic[win_name]["n_wins"] += 1
+            result_dic[lose_name]["n_draws"] += 1
+            win_list.append(win_name)
+        if i == len(preferences) - 1:
+            result_dic[win_name]["win_rate"] = round(
+                result_dic[win_name]["n_wins"] / result_dic[win_name]["n_total"], 4
+            ) * 100
+            result_dic[lose_name]["win_rate"] = round(
+                result_dic[lose_name]["n_wins"] / result_dic[lose_name]["n_total"], 4
+            ) * 100
+            result_dic["win_name"], result_dic["lose_name"] = (win_name, lose_name) \
+                if result_dic[win_name]["win_rate"] > result_dic[lose_name]["win_rate"] \
+                else (lose_name, win_name)
+    return win_list, result_dic, models_score_record

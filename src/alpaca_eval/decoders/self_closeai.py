@@ -96,7 +96,7 @@ def self_closeai_completions(
         logging.info("No samples to annotate.")
         return []
     else:
-        logging.info(f"Using `self_completions` on {n_examples} prompts using {model_name}.")
+        logging.info(f"Using `self_closeai_completions` on {n_examples} prompts using {model_name}.")
 
     if tokens_to_avoid or tokens_to_favor:
         tokenizer = tiktoken.encoding_for_model(model_name)
@@ -146,7 +146,7 @@ def self_closeai_completions(
 
     inputs = zip(prompt_batches, max_tokens)
 
-    kwargs = dict(is_chat=is_chat, **decoding_kwargs)
+    kwargs = dict(is_chat=is_chat, model=model_name, **decoding_kwargs)
     kwargs_to_log = {k: v for k, v in kwargs.items() if "api_key" not in k}
     logging.info(f"Kwargs to completion: {kwargs_to_log}. num_procs={num_procs}")
 
@@ -179,7 +179,6 @@ def self_closeai_completions(
     ]
     avg_time = [t.duration / n_examples] * len(completions_text)
 
-    print("completions_all:", completions_all)
     return dict(
         completions=completions_text,
         price_per_example=price,
@@ -212,7 +211,7 @@ def _self_closeai_completion_helper(
         openai.api_key = random.choice(openai_api_keys)
 
     # copy shared_kwargs to avoid modifying it
-    kwargs.update(dict(max_tokens=max_tokens, top_p=top_p, temperature=temperature, model='gpt-4-32k'))
+    kwargs.update(dict(max_tokens=max_tokens, top_p=top_p, temperature=temperature))
     curr_kwargs = copy.deepcopy(kwargs)
 
     while True:

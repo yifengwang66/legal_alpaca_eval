@@ -131,6 +131,7 @@ def make_prompts(
 
     text_to_format = re.findall("{([^ \s]+?)}", template)
     n_occurrences = Counter(text_to_format)
+    print("keys:", n_occurrences.keys())
 
     if not all([n == batch_size for n in n_occurrences.values()]):
         raise ValueError(f"All placeholders should be repeated batch_size={batch_size} times but {n_occurrences}.")
@@ -144,6 +145,9 @@ def make_prompts(
     df_out = df.copy()
     prompts = []
     # ugly for loops, not trivial to vectorize because of the batching
+    print("make_prompts df_out columns:", df_out.columns)
+    print("make_prompts df_out generator_1:", df_out["generator_1"], df_out["output_1"])
+    print("make_prompts df_out generator_2:", df_out["generator_2"], df_out["output_2"])
     for i in range(0, len(df_out), batch_size):
         current_prompt = copy.deepcopy(template)
         for j in range(batch_size):
@@ -151,8 +155,7 @@ def make_prompts(
                 # replace only first occurrence (that's why we don't use .format)
                 current_prompt = current_prompt.replace("{" + to_format + "}", str(df_out.iloc[i + j][to_format]), 1)
         prompts.append(current_prompt)
-
-    print("make_prompts prompts:", prompts, df_out)
+    print("make_prompts:", prompts)
     return prompts, df_out
 
 
@@ -386,6 +389,22 @@ def get_precomputed_leaderboard(precomputed_leaderboard, reference_outputs, anno
     else:
         leaderboard = dict()
     return leaderboard, precomputed_leaderboard
+
+
+def get_precomputed_round_rank(precomputed_round_rank):
+    if precomputed_round_rank is not None:
+        try:
+            round_rank = load_or_convert_to_dataframe(precomputed_round_rank)
+            round_rank_veil = load_or_convert_to_dataframe(f"{precomputed_round_rank.split('.')[0]}_veil.{precomputed_round_rank.split('.')[1]}")
+        except FileNotFoundError:
+            logging.warning(f"precomputed_round_rank = {precomputed_round_rank} not found => computing from scratch.")
+            round_rank = pd.DataFrame([])
+            round_rank_veil = pd.DataFrame([])
+
+    else:
+        round_rank = pd.DataFrame([])
+        round_rank_veil = pd.DataFrame([])
+    return round_rank, round_rank_veil, precomputed_round_rank
 
 
 def get_output_path(output_path, model_outputs, name):
