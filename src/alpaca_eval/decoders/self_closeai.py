@@ -36,6 +36,7 @@ def import_closeai_api():
 def self_closeai_completions(
         prompts: Sequence[str],
         model_name: str,
+        repeat_times: Optional[int] = 1,  # 对于每个prompt提问多少次，用于检查模型输出的稳定性
         max_tokens: Union[int, Sequence[int]] = 2048,
         tokens_to_favor: Optional[Sequence[str]] = None,
         tokens_to_avoid: Optional[Sequence[str]] = None,
@@ -146,7 +147,7 @@ def self_closeai_completions(
 
     inputs = zip(prompt_batches, max_tokens)
 
-    kwargs = dict(is_chat=is_chat, model=model_name, **decoding_kwargs)
+    kwargs = dict(is_chat=is_chat, model=model_name, repeat_times=repeat_times, **decoding_kwargs)
     kwargs_to_log = {k: v for k, v in kwargs.items() if "api_key" not in k}
     logging.info(f"Kwargs to completion: {kwargs_to_log}. num_procs={num_procs}")
 
@@ -196,6 +197,7 @@ def _self_closeai_completion_helper(
         openai_api_base: Optional[str] = None,
         top_p: Optional[float] = 1.0,
         temperature: Optional[float] = 0.7,
+        repeat_times: Optional[int] = 1,
         **kwargs,
 ):
     import_closeai_api()
@@ -214,54 +216,57 @@ def _self_closeai_completion_helper(
     kwargs.update(dict(max_tokens=max_tokens, top_p=top_p, temperature=temperature))
     curr_kwargs = copy.deepcopy(kwargs)
 
-    while True:
-        try:
-            if is_chat:
-                completion_batch = openai.ChatCompletion.create(messages=prompt_batch[0], **curr_kwargs)
+    choices_repeat_list = []
+    for i in range(repeat_times):
+        while True:
+            try:
+                if is_chat:
+                    completion_batch = openai.ChatCompletion.create(messages=prompt_batch[0], **curr_kwargs)
 
-                choices = completion_batch.choices
-                for choice in choices:
-                    assert choice.message.role == "assistant"
-                    if choice.message.content == "":
-                        choice["text"] = " "  # annoying doesn't allow empty string
-                    else:
-                        choice["text"] = choice.message.content
+                    choices = completion_batch.choices
+                    for choice in choices:
+                        assert choice.message.role == "assistant"
+                        if choice.message.content == "":
+                            choice["text"] = " "  # annoying doesn't allow empty string
+                        else:
+                            choice["text"] = choice.message.content
 
-                    if choice.message.get("function_call"):
-                        # currently we only use function calls to get a JSON object => return raw text of json
-                        choice["text"] = choice.message.function_call.arguments
+                        if choice.message.get("function_call"):
+                            # currently we only use function calls to get a JSON object => return raw text of json
+                            choice["text"] = choice.message.function_call.arguments
 
-            else:
-                completion_batch = openai.Completion.create(prompt=prompt_batch, **curr_kwargs)
-                choices = completion_batch.choices
-
-            for choice in choices:
-                choice["total_tokens"] = completion_batch.usage.total_tokens / len(prompt_batch)
-            break
-        except openai.error.OpenAIError as e:
-            logging.warning(f"OpenAIError: {e}.")
-            if "Please reduce your prompt" in str(e):
-                kwargs["max_tokens"] = int(kwargs["max_tokens"] * 0.8)
-                logging.warning(f"Reducing target length to {kwargs['max_tokens']}, Retrying...")
-                if kwargs["max_tokens"] == 0:
-                    logging.exception("Prompt is already longer than max context length. Error:")
-                    raise e
-            else:
-                if "rate limit" in str(e).lower():
-                    logging.warning(f"Hit request rate limit; retrying...")
                 else:
-                    logging.warning(f"Unknown error {e}. \n It's likely a rate limit so we are retrying...")
-                if openai_organization_ids is not None and len(openai_organization_ids) > 1:
-                    openai.organization = random.choice(
-                        [o for o in openai_organization_ids if o != openai.organization]
-                    )
-                    logging.info(f"Switching OAI organization.")
-                if openai_api_keys is not None and len(openai_api_keys) > 1:
-                    openai.api_key = random.choice([o for o in openai_api_keys if o != openai.api_key])
-                    logging.info(f"Switching OAI API key.")
-                logging.info(f"Sleeping {sleep_time} before retrying to call openai API...")
-                time.sleep(sleep_time)  # Annoying rate limit on requests.
-    return choices
+                    completion_batch = openai.Completion.create(prompt=prompt_batch, **curr_kwargs)
+                    choices = completion_batch.choices
+
+                for choice in choices:
+                    choice["total_tokens"] = completion_batch.usage.total_tokens / len(prompt_batch)
+                break
+            except openai.error.OpenAIError as e:
+                logging.warning(f"OpenAIError: {e}.")
+                if "Please reduce your prompt" in str(e):
+                    kwargs["max_tokens"] = int(kwargs["max_tokens"] * 0.8)
+                    logging.warning(f"Reducing target length to {kwargs['max_tokens']}, Retrying...")
+                    if kwargs["max_tokens"] == 0:
+                        logging.exception("Prompt is already longer than max context length. Error:")
+                        raise e
+                else:
+                    if "rate limit" in str(e).lower():
+                        logging.warning(f"Hit request rate limit; retrying...")
+                    else:
+                        logging.warning(f"Unknown error {e}. \n It's likely a rate limit so we are retrying...")
+                    if openai_organization_ids is not None and len(openai_organization_ids) > 1:
+                        openai.organization = random.choice(
+                            [o for o in openai_organization_ids if o != openai.organization]
+                        )
+                        logging.info(f"Switching OAI organization.")
+                    if openai_api_keys is not None and len(openai_api_keys) > 1:
+                        openai.api_key = random.choice([o for o in openai_api_keys if o != openai.api_key])
+                        logging.info(f"Switching OAI API key.")
+                    logging.info(f"Sleeping {sleep_time} before retrying to call openai API...")
+                    time.sleep(sleep_time)  # Annoying rate limit on requests.
+        choices_repeat_list.append(choices)
+    return choices_repeat_list[0] if len(choices_repeat_list) == 1 else choices_repeat_list
 
 
 def _requires_chatml(model: str) -> bool:

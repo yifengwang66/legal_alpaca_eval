@@ -145,9 +145,6 @@ def make_prompts(
     df_out = df.copy()
     prompts = []
     # ugly for loops, not trivial to vectorize because of the batching
-    print("make_prompts df_out columns:", df_out.columns)
-    print("make_prompts df_out generator_1:", df_out["generator_1"], df_out["output_1"])
-    print("make_prompts df_out generator_2:", df_out["generator_2"], df_out["output_2"])
     for i in range(0, len(df_out), batch_size):
         current_prompt = copy.deepcopy(template)
         for j in range(batch_size):

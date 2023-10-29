@@ -74,20 +74,20 @@ class BaseAnnotator(abc.ABC):
     DEFAULT_ANNOTATION_TYPE = int
 
     def __init__(
-        self,
-        primary_keys: Sequence[str],
-        annotators_config: Union[utils.AnyPath, list[dict[str, Any]]] = "claude",
-        seed: Optional[int] = 0,
-        is_avoid_reannotations: bool = True,
-        other_keys_to_keep: Sequence[str] = (
-            "price_per_example",
-            "time_per_example",
-            "raw_completion",
-        ),
-        is_store_missing_annotations: bool = True,
-        base_dir: Optional[utils.AnyPath] = None,
-        is_raise_if_missing_primary_keys: bool = True,
-        annotation_type: Optional[Type] = None,
+            self,
+            primary_keys: Sequence[str],
+            annotators_config: Union[utils.AnyPath, list[dict[str, Any]]] = "claude",
+            seed: Optional[int] = 0,
+            is_avoid_reannotations: bool = True,
+            other_keys_to_keep: Sequence[str] = (
+                    "price_per_example",
+                    "time_per_example",
+                    "raw_completion",
+            ),
+            is_store_missing_annotations: bool = True,
+            base_dir: Optional[utils.AnyPath] = None,
+            is_raise_if_missing_primary_keys: bool = True,
+            annotation_type: Optional[Type] = None,
     ):
         logging.info(f"Creating the annotator from `{annotators_config}`.")
         self.base_dir = Path(base_dir or self.DEFAULT_BASE_DIR)
@@ -133,10 +133,11 @@ class BaseAnnotator(abc.ABC):
         return Path(self.annotators_config).parent.name
 
     def __call__(
-        self,
-        to_annotate: utils.AnyData,
-        chunksize: Optional[int] = 128,
-        **decoding_kwargs,
+            self,
+            to_annotate: utils.AnyData,
+            chunksize: Optional[int] = 128,
+            template_prompt=None,
+            **decoding_kwargs,
     ) -> list[dict[str, Any]]:
         """Main function for annotating.
 
@@ -168,7 +169,7 @@ class BaseAnnotator(abc.ABC):
         all_annotated = []
         for df_chunk in utils.dataframe_chunk_generator(df_to_annotate, chunksize, tqdm_desc="Annotation chunk"):
             curr_df_to_annotate = self._preprocess(df_chunk)
-            df_annotated = self._annotate(curr_df_to_annotate, **decoding_kwargs)
+            df_annotated = self._annotate(curr_df_to_annotate, template_prompt, **decoding_kwargs)
             annotated = self._postprocess_and_store_(df_annotated, df_chunk)
             all_annotated.extend(annotated)
         return all_annotated
@@ -242,7 +243,7 @@ class BaseAnnotator(abc.ABC):
 
         return df_to_annotate
 
-    def _annotate(self, df_to_annotate: pd.DataFrame, **decoding_kwargs) -> pd.DataFrame:
+    def _annotate(self, df_to_annotate: pd.DataFrame, template_prompt=None, **decoding_kwargs) -> pd.DataFrame:
         """Annotate the examples."""
 
         df_annotated = df_to_annotate
@@ -256,6 +257,7 @@ class BaseAnnotator(abc.ABC):
             # actual annotation
             curr_annotated = self.annotators[annotator](
                 df_annotated.loc[curr_idcs, self.available_fields_to_format],
+                template_prompt,
                 **decoding_kwargs,
             )
 
@@ -264,9 +266,9 @@ class BaseAnnotator(abc.ABC):
         return df_annotated
 
     def _postprocess_and_store_(
-        self,
-        df_annotated: pd.DataFrame,
-        to_annotate: utils.AnyData,
+            self,
+            df_annotated: pd.DataFrame,
+            to_annotate: utils.AnyData,
     ) -> list[dict[str, Any]]:
         """Convert the dataframe into a list of dictionaries to be returned, and store current anntations."""
 
@@ -373,11 +375,11 @@ class BaseAnnotator(abc.ABC):
 
 class BaseAnnotatorJSON(BaseAnnotator):
     __doc__ = (
-        BaseAnnotator.__doc__.replace(
-            "Base class for a pool of annotators.",
-            "Base class for a pool of annotators with caching to JSON file.",
-        )
-        + """
+            BaseAnnotator.__doc__.replace(
+                "Base class for a pool of annotators.",
+                "Base class for a pool of annotators with caching to JSON file.",
+            )
+            + """
     caching_path : Path, optional
         Path to cache the annotations to. If None, will not save the annotations. If the path already exists it will
         load annotations from there.
@@ -492,20 +494,20 @@ class SingleAnnotator:
     """
 
     def __init__(
-        self,
-        prompt_template: utils.AnyPath,
-        fn_completion_parser: Optional[Union[Callable, str]] = "regex_parser",
-        completion_parser_kwargs: Optional[dict[str, Any]] = None,
-        fn_completions: Union[Callable, str] = "openai_completions",
-        completions_kwargs: Optional[dict[str, Any]] = None,
-        is_shuffle: bool = True,
-        seed: Optional[int] = 123,
-        batch_size: int = 1,
-        base_dir: utils.AnyPath = constants.EVALUATORS_CONFIG_DIR,
-        annotation_column: str = "annotation",
-        is_store_raw_completions: bool = False,
-        processors_to_kwargs: Optional[dict[str, dict]] = None,
-        is_add_default_processors: bool = True,
+            self,
+            prompt_template: utils.AnyPath,
+            fn_completion_parser: Optional[Union[Callable, str]] = "regex_parser",
+            completion_parser_kwargs: Optional[dict[str, Any]] = None,
+            fn_completions: Union[Callable, str] = "openai_completions",
+            completions_kwargs: Optional[dict[str, Any]] = None,
+            is_shuffle: bool = True,
+            seed: Optional[int] = 123,
+            batch_size: int = 1,
+            base_dir: utils.AnyPath = constants.EVALUATORS_CONFIG_DIR,
+            annotation_column: str = "annotation",
+            is_store_raw_completions: bool = False,
+            processors_to_kwargs: Optional[dict[str, dict]] = None,
+            is_add_default_processors: bool = True,
     ):
         self.base_dir = Path(base_dir)
         self.prompt_template = self._get_prompt_template(prompt_template)
@@ -529,9 +531,9 @@ class SingleAnnotator:
         self.processors = []
         processors_to_kwargs = processors_to_kwargs or {}
         if (
-            batch_size > 1
-            and self.is_add_default_processors
-            and "PaddingForBatchesProcessor" not in processors_to_kwargs
+                batch_size > 1
+                and self.is_add_default_processors
+                and "PaddingForBatchesProcessor" not in processors_to_kwargs
         ):
             processors_to_kwargs["PaddingForBatchesProcessor"] = {
                 "batch_size": batch_size,
@@ -543,7 +545,7 @@ class SingleAnnotator:
             self.processors += [Processor(**processor_kwargs)]
 
     ### Public methods ###
-    def __call__(self, df_to_annotate: pd.DataFrame, **decoding_kwargs) -> pd.DataFrame:
+    def __call__(self, df_to_annotate: pd.DataFrame, prompt_template=None, **decoding_kwargs) -> pd.DataFrame:
         """Annotates the given examples.
 
         Parameters
@@ -563,7 +565,7 @@ class SingleAnnotator:
         df_to_annotate = self._preprocess(df_to_annotate)
 
         # prompts and completions here will not be the same length as the dataframe due to batching
-        prompts, df_to_annotate = self._make_prompts(df_to_annotate)
+        prompts, df_to_annotate = self._make_prompts(df_to_annotate, prompt_template)
 
         completions = self.fn_completions(prompts=prompts, **self.completions_kwargs, **decoding_kwargs)
 
@@ -571,7 +573,6 @@ class SingleAnnotator:
         df_to_annotate[self.annotation_column] = annotations_to_save
         if self.completion_column is not None:
             df_to_annotate[self.completion_column] = completions_to_save
-
 
         # 添加附加数据，如用时和开销
         for k, v in completions.items():
@@ -605,7 +606,7 @@ class SingleAnnotator:
         return utils.read_or_return(self.base_dir / prompt_template)
 
     def _make_prompts(
-        self, df_to_annotate: pd.DataFrame, prompt_template: Optional[str] = None
+            self, df_to_annotate: pd.DataFrame, prompt_template: Optional[str] = None
     ) -> tuple[list[str], pd.DataFrame]:
         """Make all the prompts for the given examples.
 

@@ -512,7 +512,8 @@ def evaluate_round_robin(
                 print("json decoded error:", annotation["rank_res"])
                 error_decoded_res.append(annotation)
                 rank_res = json.loads(
-                    annotation["rank_res"][annotation["rank_res"].find("{"): annotation["rank_res"].rfind("}") + 1].replace("\\\n", "\\n"))
+                    annotation["rank_res"][
+                    annotation["rank_res"].find("{"): annotation["rank_res"].rfind("}") + 1].replace("\\\n", "\\n"))
             # 给出这样的排名的原因
             rank_reason = rank_res["reason"]
             preferences.append(rank_res["rank_list"])
@@ -594,10 +595,19 @@ def make_leaderboard_round_robin(
     random.shuffle(generator_list)
     # 随机分组
     # generator_groups = [generator_list[i:i + 2] for i in range(0, len(generator_list), 2)]
-    generator_groups = [['glm', '360'], ['xunfei', 'claude'], ["wenxinyiyan", "baichuan"], ["tongyi", "gpt-3"]]
-    # generator_groups = [['glm', '360']]
+    # generator_groups = [['glm', '360'], ['xunfei', 'claude'], ["wenxinyiyan", "baichuan"], ["tongyi", "gpt-3"]] # round_1 group
+    # generator_groups = [['glm', 'xunfei'], ['baichuan', 'tongyi']]  # round_2 win_group
+    # generator_groups = [['360', 'claude'], ['wenxinyiyan', 'gpt-3']]  # round_2 loss_group
+    # generator_groups = [['glm', 'baichuan']]  # round_3 win_win_group 排1,2名
+    # generator_groups = [['xunfei', 'tongyi']]  # round_3 win_loss_group 排3,4名
+    # generator_groups = [['claude', 'wenxinyiyan']]  # round_3 loss_win_group 排5,6名
+    generator_groups = [['360', 'gpt-3']]  # round_3 loss_loss_group 排7,8名
+
+    # generator_groups = [['glm', '360']] # test_group
     print("make_leaderboard_round_robin generator_groups: ", generator_groups)
-    round_count = 1
+    round_count = 3
+    round_info = f"round_{round_count}_loss_loss_group"
+    precomputed_round_rank = f"{leaderboard_path.split('.')[0]}_{round_info}.{leaderboard_path.split('.')[1]}"
     for group in generator_groups:
         if len(group) == 1:
             continue
@@ -611,28 +621,30 @@ def make_leaderboard_round_robin(
             name_1=group[0],
             name_2=group[1],
             round_count=round_count,
-            precomputed_round_rank=leaderboard_path,
+            precomputed_round_rank=precomputed_round_rank,
             current_leaderboard_mode=leaderboard_mode,
-            # max_instances=1,
+            # max_instances=10,
             **kwargs,
         )
         if annotations is not None:
             all_annotations += annotations
-        df_round_rank.to_csv(leaderboard_path, encoding="utf-8-sig")
-        df_round_rank_veil.to_csv(f"{leaderboard_path.split('.')[0]}_veil.{leaderboard_path.split('.')[1]}",
+        df_round_rank.to_csv(precomputed_round_rank, encoding="utf-8-sig")
+        df_round_rank_veil.to_csv(f"{precomputed_round_rank.split('.')[0]}_veil.{precomputed_round_rank.split('.')[1]}",
                                   encoding="utf-8-sig")
         round_result["win_group"].append(result_dic["win_name"])
         round_result["lose_group"].append(result_dic["lose_name"])
         # 每一对比完之后都记录一下，防止报错中断导致前面比过的也没有记录
-        with open(round_result_path / f"round_{round_count}.json", "w", encoding="utf-8") as f:
+        with open(round_result_path / f"{round_info}_result.json", "w", encoding="utf-8") as f:
             json.dump(round_result, f, ensure_ascii=False)
+        with open(round_result_path / f"{round_info}_{group[0]}_vs_{group[1]}.json", "w", encoding="utf-8") as f:
+            json.dump(result_dic, f, ensure_ascii=False)
 
-    total_round_rank = utils.load_or_convert_to_dataframe(leaderboard_path)
-    total_round_rank = pd.DataFrame(total_round_rank)
+    # total_round_rank = utils.load_or_convert_to_dataframe(leaderboard_path)
+    # total_round_rank = pd.DataFrame(total_round_rank)
 
     print('all_annotations:', all_annotations)
 
-    return total_round_rank, all_annotations
+    return all_annotations
 
 
 def analyze_evaluators(
@@ -761,7 +773,7 @@ def main():
 
 
 # 人工评测结果处理
-def extract_round_result(round_result_path):
+def extract_round_result(round_result_path, record_output_path="round_result_diff_record.json"):
     """
     return example:
     {
@@ -785,7 +797,11 @@ def extract_round_result(round_result_path):
     """
     round_result = pd.read_csv(round_result_path)
     veil_name_model = {veil_name: real_name for real_name, veil_name in MODEL_NAME_VEIL.items()}
-    round_record = {}
+    try:
+        with open(record_output_path, "r", encoding="utf-8") as f:
+            round_record = json.load(f)
+    except FileNotFoundError:
+        round_record = {}
 
     # 转换人工评测结果
     for col in round_result.columns:
@@ -794,6 +810,7 @@ def extract_round_result(round_result_path):
                                  round_result[col]]
 
     question_type_list = [type_name for type_name in round_result["type"].unique()]
+    # 统计人工结果和机器结果的不一致情况
     for type_name in question_type_list:
         type_questions = round_result[round_result["type"] == type_name]
         for col in type_questions.columns:
@@ -828,12 +845,88 @@ def extract_round_result(round_result_path):
                                                                                             round_record[round_name][
                                                                                                 f"{model_1}_vs_{model_2}"][
                                                                                                 "type_count"]
+
+    # 统计人工测评的排名结果
+    for col in round_result.columns:
+        if "vs" in col and "human" in col:
+            human_record = {}
+            name_chunk = col.split('_')
+            round_name = name_chunk[0]
+            model_1, model_2 = name_chunk[1], name_chunk[3]
+            result_count = round_result[col].value_counts().to_dict()
+            model_1_count = result_count.get(model_1) if result_count.get(model_1) is not None else 0
+            model_2_count = result_count.get(model_2) if result_count.get(model_2) is not None else 0
+            both_wrong_count = result_count.get("both_wrong") if result_count.get("both_wrong") is not None else 0
+            both_right_count = result_count.get("both_right") if result_count.get("both_right") is not None else 0
+            total = model_1_count + model_2_count + both_wrong_count + both_right_count
+            human_record[model_1] = {
+                "win_rate": round((model_1_count + both_right_count) / total, 4) * 100,
+                "n_wins": model_1_count,
+                "n_draws": model_2_count,
+                "both_wrong": both_wrong_count,
+                "both_right": both_right_count,
+                "n_total": total
+            }
+            human_record[model_2] = {
+                "win_rate": round((model_2_count + both_right_count) / total, 4) * 100,
+                "n_wins": model_2_count,
+                "n_draws": model_1_count,
+                "both_wrong": both_wrong_count,
+                "both_right": both_right_count,
+                "n_total": total
+            }
+            human_record["win_name"] = model_1 if human_record[model_1]["win_rate"] > human_record[model_2][
+                "win_rate"] else model_2
+            human_record["loss_name"] = model_1 if human_record["win_name"] == model_2 else model_2
+            with open(f"round_result/{round_name}_{model_1}_vs_{model_2}_human_result.json", "w",
+                      encoding="utf-8") as f:
+                json.dump(human_record, f, ensure_ascii=False)
+
     print("round_record:", round_record)
-    with open(f"round_result_diff_record.json", "w", encoding="utf-8") as f:
+    with open(record_output_path, "w", encoding="utf-8") as f:
         json.dump(round_record, f, ensure_ascii=False)
 
     round_result.to_csv(round_result_path, encoding="utf-8-sig")
     return
+
+
+def extract_machine_result(round_result_path):
+    round_result = pd.read_csv(round_result_path)
+    # 统计机器测评的排名结果
+    for col in round_result.columns:
+        if "vs" in col and "human" not in col:
+            machine_record = {}
+            name_chunk = col.split('_')
+            round_name = name_chunk[0]
+            model_1, model_2 = name_chunk[1], name_chunk[3]
+            result_count = round_result[col].value_counts().to_dict()
+            model_1_count = result_count.get(model_1) if result_count.get(model_1) is not None else 0
+            model_2_count = result_count.get(model_2) if result_count.get(model_2) is not None else 0
+            both_wrong_count = result_count.get("both_wrong") if result_count.get("both_wrong") is not None else 0
+            both_right_count = result_count.get("both_right") if result_count.get("both_right") is not None else 0
+            total = model_1_count + model_2_count + both_wrong_count + both_right_count
+            machine_record[model_1] = {
+                "win_rate": round((model_1_count + both_right_count) / total, 4) * 100,
+                "n_wins": model_1_count,
+                "n_draws": model_2_count,
+                "both_wrong": both_wrong_count,
+                "both_right": both_right_count,
+                "n_total": total
+            }
+            machine_record[model_2] = {
+                "win_rate": round((model_2_count + both_right_count) / total, 4) * 100,
+                "n_wins": model_2_count,
+                "n_draws": model_1_count,
+                "both_wrong": both_wrong_count,
+                "both_right": both_right_count,
+                "n_total": total
+            }
+            machine_record["win_name"] = model_1 if machine_record[model_1]["win_rate"] > machine_record[model_2][
+                "win_rate"] else model_2
+            machine_record["loss_name"] = model_1 if machine_record["win_name"] == model_2 else model_2
+            with open(f"round_result/round_{round_name[1]}_{model_1}_vs_{model_2}.json", "w",
+                      encoding="utf-8") as f:
+                json.dump(machine_record, f, ensure_ascii=False)
 
 
 def extract_multi_compare_per_instruction(annotations):
@@ -923,4 +1016,5 @@ if __name__ == "__main__":
     # main()
     # a_test_func()
     # generate_test_dataset()
-    extract_round_result('legal_leaderboard.csv')
+    extract_round_result('legal_leaderboard_round_1.csv', "round_result/round_result_diff_record.json")
+    # extract_machine_result("legal_leaderboard_round_1.csv")

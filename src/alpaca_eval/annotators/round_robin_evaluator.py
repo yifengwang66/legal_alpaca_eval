@@ -2,6 +2,7 @@ import logging
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence, Type, Union
+from alpaca_eval.template_prompt import common_prompt, kindness_prompt
 
 import numpy as np
 import pandas as pd
@@ -212,7 +213,8 @@ class RoundRobinAnnotatorLocal(BaseAnnotator):
             keys_to_merge += ["tmp_idx"]  # add a temporary index to merge on
 
         # find all the columns that are in both
-        other_same_cols = [k for k in outputs_1.columns if k in outputs_2.columns and k not in (keys_to_merge + ["output"])]
+        other_same_cols = [k for k in outputs_1.columns if
+                           k in outputs_2.columns and k not in (keys_to_merge + ["output"])]
 
         df_to_annotate = pd.merge(
             pd.merge(
@@ -226,8 +228,6 @@ class RoundRobinAnnotatorLocal(BaseAnnotator):
         )
 
         print("annotate_round_robin df_to_annotate columns:", df_to_annotate.columns)
-        print("annotate_round_robin df_to_annotate generator_1:", df_to_annotate["generator_1"], df_to_annotate["output_1"])
-        print("annotate_round_robin df_to_annotate generator_2:", df_to_annotate["generator_2"], df_to_annotate["output_2"])
 
         for c in other_same_cols:
             # if the columns are the same, we can drop the _2
@@ -247,7 +247,16 @@ class RoundRobinAnnotatorLocal(BaseAnnotator):
                     f" This means that there are missing examples or duplicates. We are taking a SQL inner join."
                 )
 
-        out = self.__call__(df_to_annotate, **decoding_kwargs)
+        question_type_list = [type_name for type_name in df_to_annotate["type"].unique()]
+
+        out = []
+        for question_type in question_type_list:
+            print(f"current question type: {question_type}")
+            df_to_annotate_partial = df_to_annotate[df_to_annotate["type"] == question_type]
+            if question_type == "向善":
+                out.extend(self.__call__(df_to_annotate_partial, template_prompt=kindness_prompt, **decoding_kwargs))
+            else:
+                out.extend(self.__call__(df_to_annotate_partial, template_prompt=common_prompt, **decoding_kwargs))
 
         return out
 
